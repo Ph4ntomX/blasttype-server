@@ -10,6 +10,7 @@ const Stat = Schemas.Stat;
 
 const jwt = require("jsonwebtoken");
 
+const MINIMUM_PLAYERS = 1;
 const COUNTDOWN = 0 //5;
 const GAME_COUNTDOWN = 0 //3;
 const GAME_TIMER = 60
@@ -191,7 +192,7 @@ function initSocket(server) {
         console.log(`${user.username} joined ${roomId}`);
 
         // If two players, start countdown at 30s
-        if (room.players.length > 1) {
+        if (room.players.length >= MINIMUM_PLAYERS) {
             startCountdown(room, roomId);
         }
 
