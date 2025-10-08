@@ -71,6 +71,16 @@ function initSocket(server) {
     }
 
     async function saveGame(room) {
+        const fixedUsers = room.players.map((player) => {
+            return {
+                _id: player.user._id,
+                username: player.user.username,
+                wpm: player.wpm,
+                accuracy: player.accuracy,
+                progress: player.progress,
+            }
+        })
+
         room.players.forEach((player) => {
             const stats = player.user.multiplayer_stats != null ? player.user.multiplayer_stats : new Stat({});
 
@@ -90,8 +100,8 @@ function initSocket(server) {
         })
 
         Game.create({
-            winner: room.winner.user,
-            players: room.players.map((player) => player.user),
+            winner: fixedUsers.find((user) => user._id === room.winner.user._id),
+            players: fixedUsers,
             passage: room.passage,
         });
     }
@@ -170,11 +180,17 @@ function initSocket(server) {
     });
 
     gameNamespace.on("connection", async (socket) => {
-        const user = await User.findById(socket.userId); // from jwt middleware
+        const queryUser = await User.findById(socket.userId); // from jwt middleware
 
-        if (!user) {
+        if (!queryUser) {
             socket.disconnect();
             return;
+        }
+
+        const user = {
+            _id: queryUser._id,
+            username: queryUser.username,
+            multiplayer_stats: queryUser.multiplayer_stats,
         }
 
         // Assign player to a room
