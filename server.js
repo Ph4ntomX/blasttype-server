@@ -5,9 +5,12 @@ const http = require("http");
 const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
 
+const PORT = 5000;
+
 const UserAuthRoute = require("./route/auth");
 const UserRoute = require("./route/user");
 const PassagesRoute = require("./route/passages");
+const GamesRoute = require("./route/games");
 const initSocket = require("./socket");
 
 require("dotenv").config();
@@ -37,9 +40,10 @@ app.use(express.json());
 app.use("/auth", UserAuthRoute);
 app.use("/users", UserRoute);
 app.use("/passages", PassagesRoute);
+app.use("/games", GamesRoute);
 
 initSocket(server);
 
-server.listen(5123, () => {
-    console.log("server is running at http://localhost:5123");
+server.listen(PORT, () => {
+    console.log("server is running at http://localhost:" + PORT);
 });

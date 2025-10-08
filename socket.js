@@ -190,8 +190,8 @@ function initSocket(server) {
 
         console.log(`${user.username} joined ${roomId}`);
 
-        // If first player, start countdown at 30s
-        if (room.players.length === 1) {
+        // If two players, start countdown at 30s
+        if (room.players.length > 1) {
             startCountdown(room, roomId);
         }
 
