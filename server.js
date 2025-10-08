@@ -20,7 +20,7 @@ const server = http.createServer(app);
 
 async function connectToMongoDB() {
     try {
-        await mongoose.connect(process.env.MONGO_URI + "/blasttype");
+        await mongoose.connect("mongodb://" + process.env.MONGO_URI + "/blasttype");
         console.log("MongoDB is Connected");
     } catch (error) {
         console.log(error);
