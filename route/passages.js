@@ -5,11 +5,7 @@ const Controller = require("../controllers/passage");
 
 router.get("/", async (req, res) => {
   try {
-    const category = req.query.category;
-    const page = req.query.page;
-    const limit = req.query.limit;
-
-    const passages = await Controller.getPassages({category}, page, limit);
+    const passages = await Controller.getPassages({difficulty: req.query.difficulty, search: req.query.search});
 
     if (!passages) {
       return res.status(404).send("Passages were not found");
@@ -23,9 +19,9 @@ router.get("/", async (req, res) => {
 
 router.get("/random", async (req, res) => {
   try {
-    const category = req.query.category;
+    const difficulty = req.query.difficulty;
 
-    const passage = await Controller.randomPassage({category});
+    const passage = await Controller.randomPassage({difficulty});
 
     if (!passage) {
       return res.status(404).send("Passage was not found");

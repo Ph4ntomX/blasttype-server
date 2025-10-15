@@ -15,7 +15,7 @@ router.post("/signup", async (req, res) => {
 
 router.post("/login", async (req, res) => {
     try {
-        const users = await Controller.signInUser(req.body.email, req.body.password);
+        const users = await Controller.signInUser(req.body.username, req.body.password);
         res.status(200).send(users);
     } catch (error) {
         console.log(error);

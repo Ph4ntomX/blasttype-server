@@ -41,6 +41,13 @@ const userSchema = new Schema({
   weekly_challenge: challengeSchema,
 });
 
+const baseUserSchema = new Schema({
+  username: { type: String, required: true },
+  wpm: { type: Number, required: true },
+  accuracy: { type: Number, required: true },
+  progress: { type: Number, required: true },
+})
+
 const passagesSchema = new Schema({
   text: {
     type: String,
@@ -55,8 +62,8 @@ const passagesSchema = new Schema({
 });
 
 const gameSchema = new Schema({
-  winner: userSchema,
-  players: [userSchema],
+  winner: baseUserSchema,
+  players: [baseUserSchema],
   passage: passagesSchema,
   playedAt: { type: Date, default: Date.now },
 })

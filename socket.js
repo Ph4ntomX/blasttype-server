@@ -8,6 +8,8 @@ const Game = Schemas.Game;
 const Passage = Schemas.Passage; // for assigning passages
 const Stat = Schemas.Stat;
 
+const ChallengeController = require("./controllers/challenge");
+
 const jwt = require("jsonwebtoken");
 
 const MINIMUM_PLAYERS = 1;
@@ -16,13 +18,22 @@ const GAME_COUNTDOWN = 0 //3;
 const GAME_TIMER = 60
 const COUNTDOWN_SKIP = 0 //5;
 
-// in-memory rooms
-const rooms = {}; // { roomId: { players: [], countdown, interval, passage } }
-let roomCounter = 1;
+// in-memory rooms per difficulty
+const roomsByDifficulty = {
+    easy: {},
+    medium: {},
+    hard: {},
+};
+const roomCounters = {
+    easy: 1,
+    medium: 1,
+    hard: 1,
+};
 
-function createRoom() {
-    const roomId = "room_" + roomCounter++;
-    rooms[roomId] = {
+function createRoom(difficulty) {
+    const roomId = "room_" + roomCounters[difficulty]++;
+    const newRoom = {
+        type: difficulty,
         players: [],
         countdown: COUNTDOWN,
         interval: null,
@@ -31,18 +42,20 @@ function createRoom() {
         startedGameCountdown: false,
         started: false,
     };
-    return rooms[roomId];
+    roomsByDifficulty[difficulty][roomId] = newRoom;
+    return newRoom;
 }
 
-function getAvailableRoom() {
-    // Find a room that hasn't started and has < 5 players
-    for (let roomId in rooms) {
-        const room = rooms[roomId];
-        if (!room.startedGameCountdown && room.players.length < 5) {
+function getAvailableRoom(difficulty) {
+    // Find a room that hasn't started and has < 5 players within the difficulty
+    const table = roomsByDifficulty[difficulty];
+    for (let roomId in table) {
+        const room = table[roomId];
+        if (room && !room.startedGameCountdown && room.players.length < 5) {
             return room;
         }
     }
-    return createRoom();
+    return createRoom(difficulty);
 }
 
 function initSocket(server) {
@@ -50,7 +63,8 @@ function initSocket(server) {
         cors: { origin: "*" },
     });
 
-    const gameNamespace = io.of("/game");
+    // Dynamic namespaces for difficulty: /game/easy, /game/medium, /game/hard
+    const gameNamespace = io.of(/^\/game\/(easy|medium|hard)$/);
 
     async function checkResults(room) {
         let playersCompleted = 0;
@@ -71,6 +85,11 @@ function initSocket(server) {
     }
 
     async function saveGame(room) {
+        if(room.winner == null) {
+            // get highest wpm player
+            room.winner = room.players.reduce((a, b) => a.wpm > b.wpm ? a : b);
+        }
+        
         const fixedUsers = room.players.map((player) => {
             return {
                 _id: player.user._id,
@@ -81,18 +100,35 @@ function initSocket(server) {
             }
         })
 
-        room.players.forEach((player) => {
-            const stats = player.user.multiplayer_stats != null ? player.user.multiplayer_stats : new Stat({});
+        room.players.forEach(async (player) => {
+            console.log("checking foreach")
 
-            stats.bestWPM = Math.max(stats.bestWPM, player.wpm);
-            stats.gamesPlayed++;
+            let { daily_challenge, weekly_challenge } = await ChallengeController.getUserChallenge(player.user);
 
-            const previousAccuracy = stats.avgAccuracy * (stats.gamesPlayed - 1);
-            stats.avgAccuracy = Math.round((previousAccuracy + player.accuracy) / stats.gamesPlayed);
+            const changeData = {
+                wpm: player.wpm,
+                accuracy: player.accuracy,
+                playedGame: true,
+                won: player.user._id === room.winner.user._id,
+            }
 
-            player.user.multiplayer_stats = stats;
+            console.log(changeData)
 
-            User.findByIdAndUpdate(player.user._id, { multiplayer_stats: stats }).then(() => {
+            console.log("changing data")
+            daily_challenge = ChallengeController.changeChallenge(daily_challenge, changeData);
+            weekly_challenge = ChallengeController.changeChallenge(weekly_challenge, changeData);
+
+            const multiplayer_stats = player.user.multiplayer_stats != null ? player.user.multiplayer_stats : new Stat({});
+
+            multiplayer_stats.bestWPM = Math.max(multiplayer_stats.bestWPM, player.wpm);
+            multiplayer_stats.gamesPlayed++;
+
+            const previousAccuracy = multiplayer_stats.avgAccuracy * (multiplayer_stats.gamesPlayed - 1);
+            multiplayer_stats.avgAccuracy = Math.round((previousAccuracy + player.accuracy) / multiplayer_stats.gamesPlayed);
+
+            console.log(player.user.username + " updated stats")
+            console.log(player.user)
+            User.findByIdAndUpdate(player.user._id, { multiplayer_stats, daily_challenge, weekly_challenge }).then(() => {
                 console.log(player.user.username + " updated stats");
             }).catch((error) => {
                 console.log(error);
@@ -106,21 +142,21 @@ function initSocket(server) {
         });
     }
 
-    async function startGame(room, roomId) {
+    async function startGame(room, roomId, namespace) {
         room.started = true;
 
-        gameNamespace.to(roomId).emit("phase", "game");
-        gameNamespace.to(roomId).emit("next_word", false);
+        namespace.to(roomId).emit("phase", "game");
+        namespace.to(roomId).emit("next_word", false);
 
         room.countdown = GAME_TIMER;
 
         room.interval = setInterval(() => {
-            if (rooms[roomId] === null) {
+            if (roomsByDifficulty[room.type][roomId] === null) {
                 clearInterval(room.interval);
                 return;
             }
 
-            gameNamespace.to(roomId).emit("countdown", room.countdown);
+            namespace.to(roomId).emit("countdown", room.countdown);
             room.countdown--;
 
             if (room.countdown < 0) {
@@ -130,19 +166,26 @@ function initSocket(server) {
         }, 1000);
     }
 
-    async function startCountdown(room, roomId) {
+    async function startCountdown(room, roomId, namespace) {
         if (!room.passage) {
-            // pick random passage (for now any difficulty)
-            room.passage = await Passage.aggregate([{ $sample: { size: 1 } }]);
+            // pick random passage by difficulty
+            if (["easy", "medium", "hard"].includes(room.type)) {
+                room.passage = await Passage.aggregate([
+                    { $match: { difficulty: room.type } },
+                    { $sample: { size: 1 } },
+                ]);
+            } else {
+                room.passage = await Passage.aggregate([{ $sample: { size: 1 } }]);
+            }
             room.passage = room.passage[0];
         }
 
         room.interval = setInterval(() => {
-            if (rooms[roomId] === null) {
+            if (roomsByDifficulty[room.type][roomId] === null) {
                 clearInterval(room.interval);
                 return;
             }
-            gameNamespace.to(roomId).emit("countdown", room.countdown);
+            namespace.to(roomId).emit("countdown", room.countdown);
             room.countdown--;
 
             if (room.countdown < 0) {
@@ -150,23 +193,22 @@ function initSocket(server) {
                     room.countdown = GAME_COUNTDOWN;
                     room.startedGameCountdown = true;
 
-                    gameNamespace.to(roomId).emit("phase", "game_countdown");
-                    gameNamespace.to(roomId).emit("start_game", {
+                    namespace.to(roomId).emit("phase", "game_countdown");
+                    namespace.to(roomId).emit("start_game", {
                         passage: room.passage,
                         playerNames: room.players.map((player) => player.user.username),
                     });
                 } else {
                     clearInterval(room.interval);
                     
-                    startGame(room, roomId)
+                    startGame(room, roomId, namespace)
                 }
             }
         }, 1000);
     }
 
+    // Auth middleware for all difficulty namespaces
     gameNamespace.use((socket, next) => {
-        console.log(socket.handshake.auth)
-
         const token = socket.handshake.auth.token;
         try {
             const userWithId = jwt.verify(token, process.env.JWT_SECRET);
@@ -174,12 +216,14 @@ function initSocket(server) {
             socket.userId = userWithId.id; // { id, username, etc. }
             next();
         } catch (error) {
-            console.log(error.message)
             next(new Error("Auth failed"));
         }
     });
 
+    // Handle connections per difficulty namespace
     gameNamespace.on("connection", async (socket) => {
+        const namespace = socket.nsp;
+        const difficulty = namespace.name.split("/").pop(); // easy | medium | hard
         const queryUser = await User.findById(socket.userId); // from jwt middleware
 
         if (!queryUser) {
@@ -191,11 +235,13 @@ function initSocket(server) {
             _id: queryUser._id,
             username: queryUser.username,
             multiplayer_stats: queryUser.multiplayer_stats,
+            daily_challenge: queryUser.daily_challenge,
+            weekly_challenge: queryUser.weekly_challenge,
         }
 
-        // Assign player to a room
-        const room = getAvailableRoom();
-        const roomId = Object.keys(rooms).find((id) => rooms[id] === room);
+        // Assign player to a room in the selected difficulty
+        const room = getAvailableRoom(difficulty);
+        const roomId = Object.keys(roomsByDifficulty[difficulty]).find((id) => roomsByDifficulty[difficulty][id] === room);
 
         socket.user = user;
 
@@ -205,11 +251,11 @@ function initSocket(server) {
 
         socket.emit("phase", "waiting");
 
-        console.log(`${user.username} joined ${roomId}`);
+        console.log(`${user.username} joined ${roomId} (${difficulty})`);
 
         // If two players, start countdown at 30s
         if (room.players.length >= MINIMUM_PLAYERS) {
-            startCountdown(room, roomId);
+            startCountdown(room, roomId, namespace);
         }
 
         // If room becomes full, skip countdown to 5s
@@ -268,9 +314,7 @@ function initSocket(server) {
             }
 
             // emit socket room
-
-            
-            gameNamespace.to(roomId).emit("update_player", {
+            namespace.to(roomId).emit("update_player", {
                 playerName: socket.user.username,
                 progress: socket.progress,
                 wpm: socket.wpm,
@@ -280,7 +324,7 @@ function initSocket(server) {
 
         // Disconnect
         socket.on("disconnect", () => {
-            console.log(`${user.username} left ${roomId}`);
+            console.log(`${user.username} left ${roomId} (${difficulty})`);
             room.players = room.players.filter((s) => s !== socket);
 
             const playersLeft = room.players.length || 0;
@@ -292,8 +336,7 @@ function initSocket(server) {
             if (playersLeft <= 1) {
                 console.log("Game ends")
 
-                rooms[roomId] = null;
-                roomCounter--;
+                roomsByDifficulty[difficulty][roomId] = null;
             }
         });
     });

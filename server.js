@@ -5,7 +5,7 @@ const http = require("http");
 const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
 
-const PORT = 5000;
+const PORT = 5123;
 
 const UserAuthRoute = require("./route/auth");
 const UserRoute = require("./route/user");
@@ -30,17 +30,17 @@ async function connectToMongoDB() {
 connectToMongoDB();
 
 
-app.get("/", (req, res) => {
+app.get("/api", (req, res) => {
     res.send("Welcome to BlastType API");
 })
 
 app.use(cors());
 app.use(express.json());
 
-app.use("/auth", UserAuthRoute);
-app.use("/users", UserRoute);
-app.use("/passages", PassagesRoute);
-app.use("/games", GamesRoute);
+app.use("/api/auth", UserAuthRoute);
+app.use("/api/users", UserRoute);
+app.use("/api/passages", PassagesRoute);
+app.use("/api/games", GamesRoute);
 
 initSocket(server);
 

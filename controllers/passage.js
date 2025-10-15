@@ -1,19 +1,24 @@
 let Controller = {}
 const Passage = require("../models/schemas").Passage;
 
-Controller.getPassages = async (rawFilter, page = 1, limit = 10) => {
+Controller.getPassages = async (rawFilter) => {
     // pagination implemented
 
     let filter = {};
     
-    if (rawFilter.category) {
-      filter.category = rawFilter.category;
+    if (rawFilter.difficulty) {
+      filter.difficulty = rawFilter.difficulty;
+    }
+
+    if (rawFilter.search && rawFilter.search !== "") {
+        filter.text = { $regex: rawFilter.search, $options: "i" };
     }
 
     try {
-        const passages = await Passage.find(filter).skip((page - 1) * limit).limit(limit);
+        const passages = await Passage.find(filter);
         return passages;
     } catch (error) {
+        console.log(error)
         return;
     }
 }
@@ -30,8 +35,8 @@ Controller.getPassageById = async (id) => {
 Controller.randomPassage = async (rawFilter) => {
     let filter = {};
     
-    if (rawFilter.category) {
-      filter.category = rawFilter.category;
+    if (rawFilter.difficulty) {
+      filter.difficulty = rawFilter.difficulty;
     }
 
     try {

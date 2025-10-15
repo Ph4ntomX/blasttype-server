@@ -6,10 +6,12 @@ const Controller = require("../controllers/game");
 router.get("/", async (req, res) => {
   try {
     const difficulty = req.query.difficulty;
+    const search = req.query.search;
     const page = req.query.page;
     const limit = req.query.limit;
+    const sort = req.query.sort;
 
-    const games = await Controller.getGames({difficulty}, page, limit);
+    const games = await Controller.getGames({difficulty, search}, page, limit, sort);
 
     if (!games) {
       return res.status(404).send("Games were not found");
