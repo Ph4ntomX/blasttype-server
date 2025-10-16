@@ -27,12 +27,6 @@ router.post("/", authenticateAdmin, async (req, res) => {
       return res.status(400).send("No data provided");
     }
 
-    const { text, difficulty, category } = req.body;
-
-    if (!text || !difficulty || !category) {
-        return res.status(400).send("All fields are required");
-    }
-
     const challenge = await Controller.createChallenge({ type, targetValue, period, goal });
 
     if (!challenge) {

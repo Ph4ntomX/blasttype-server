@@ -76,9 +76,11 @@ Controller.getChallenges = async (params) => {
 
 Controller.createChallenge = async (params) => {
     try {
+        console.log(params)
         const newChallenge = await Challenge.create(params);
         return newChallenge;
     } catch (error) {
+        console.log(error)
         return;
     }
 }

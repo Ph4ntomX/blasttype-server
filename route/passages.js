@@ -60,13 +60,13 @@ router.post("/", authenticateAdmin, async (req, res) => {
       return res.status(400).send("No data provided");
     }
 
-    const { text, difficulty, category } = req.body;
+    const { text, difficulty } = req.body;
 
-    if (!text || !difficulty || !category) {
+    if (!text || !difficulty) {
         return res.status(400).send("All fields are required");
     }
 
-    const passage = await Controller.createPassage({ text, difficulty, category });
+    const passage = await Controller.createPassage({ text, difficulty });
 
     if (!passage) {
       return res.status(404).send("Passage was not created");

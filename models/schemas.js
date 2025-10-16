@@ -13,7 +13,7 @@ const challengeSchema = new Schema({
   currentValue: { type: Number, default: 0, required: true },
   targetValue: { type: Number, default: 0, required: true },
   completed: { type: Boolean, default: false },
-  expiresAt: { type: Date, required: true }
+  expiresAt: { type: Date, required: false }
 });
 
 const userSchema = new Schema({
