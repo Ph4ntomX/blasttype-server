@@ -13,10 +13,10 @@ const ChallengeController = require("./controllers/challenge");
 const jwt = require("jsonwebtoken");
 
 const MINIMUM_PLAYERS = 1;
-const COUNTDOWN = 0 //5;
-const GAME_COUNTDOWN = 0 //3;
+const COUNTDOWN = 5;
+const GAME_COUNTDOWN = 3;
 const GAME_TIMER = 60
-const COUNTDOWN_SKIP = 0 //5;
+const COUNTDOWN_SKIP = 5;
 
 // in-memory rooms per difficulty
 const roomsByDifficulty = {
@@ -32,16 +32,45 @@ const roomCounters = {
 
 function createRoom(difficulty) {
     const roomId = "room_" + roomCounters[difficulty]++;
+    console.log(difficulty, roomCounters[difficulty])
+
     const newRoom = {
         type: difficulty,
         players: [],
-        countdown: COUNTDOWN,
+        playersCompleted: 0,
+        countdown: COUNTDOWN - 1,
         interval: null,
         passage: null,
         winner: null,
+        startedCountdown: false,
         startedGameCountdown: false,
         started: false,
     };
+
+    if (!newRoom.passage) {
+        // pick random passage by difficulty
+        if (["easy", "medium", "hard"].includes(newRoom.type)) {
+            Passage.aggregate([
+                { $match: { difficulty: newRoom.type } },
+                { $sample: { size: 1 } },
+            ]).then((result) => {
+                newRoom.passage = result[0];
+
+                for (let player of newRoom.players) {
+                    player.emit("passage", newRoom.passage);
+                }
+            });
+        } else {
+            Passage.aggregate([{ $sample: { size: 1 } }]).then((result) => {
+                newRoom.passage = result[0];
+
+                for (let player of newRoom.players) {
+                    player.emit("passage", newRoom.passage);
+                }
+            });
+        }
+    }
+
     roomsByDifficulty[difficulty][roomId] = newRoom;
     return newRoom;
 }
@@ -63,33 +92,29 @@ function initSocket(server) {
         cors: { origin: "*" },
     });
 
-    // Dynamic namespaces for difficulty: /game/easy, /game/medium, /game/hard
-    const gameNamespace = io.of(/^\/game\/(easy|medium|hard)$/);
+    // Dynamic namespaces for difficulty: /api/easy, /api/medium, /api/hard
+    const gameNamespace = io.of(/^\/api\/(easy|medium|hard)$/);
 
     async function checkResults(room) {
-        let playersCompleted = 0;
-
         room.players.forEach((player) => {
             if (player.progress >= 100) {
-                playersCompleted++;
-
-                if(room.winner == null) {
+                if (room.winner == null) {
                     room.winner = player;
                 }
             }
         });
 
-        if (playersCompleted === room.players.length) {
+        if (room.playersCompleted === room.players.length) {
             room.countdown = 0
         }
     }
 
     async function saveGame(room) {
-        if(room.winner == null) {
+        if (room.winner == null) {
             // get highest wpm player
             room.winner = room.players.reduce((a, b) => a.wpm > b.wpm ? a : b);
         }
-        
+
         const fixedUsers = room.players.map((player) => {
             return {
                 _id: player.user._id,
@@ -126,8 +151,6 @@ function initSocket(server) {
             const previousAccuracy = multiplayer_stats.avgAccuracy * (multiplayer_stats.gamesPlayed - 1);
             multiplayer_stats.avgAccuracy = Math.round((previousAccuracy + player.accuracy) / multiplayer_stats.gamesPlayed);
 
-            console.log(player.user.username + " updated stats")
-            console.log(player.user)
             User.findByIdAndUpdate(player.user._id, { multiplayer_stats, daily_challenge, weekly_challenge }).then(() => {
                 console.log(player.user.username + " updated stats");
             }).catch((error) => {
@@ -145,10 +168,11 @@ function initSocket(server) {
     async function startGame(room, roomId, namespace) {
         room.started = true;
 
-        namespace.to(roomId).emit("phase", "game");
-        namespace.to(roomId).emit("next_word", false);
+        setTimeout(() => {
+            namespace.to(roomId).emit("phase", "game");
+        }, 1000);
 
-        room.countdown = GAME_TIMER;
+        room.countdown = GAME_TIMER - 1;
 
         room.interval = setInterval(() => {
             if (roomsByDifficulty[room.type][roomId] === null) {
@@ -156,7 +180,7 @@ function initSocket(server) {
                 return;
             }
 
-            namespace.to(roomId).emit("countdown", room.countdown);
+            namespace.to(roomId).emit("countdown", room.countdown + 1);
             room.countdown--;
 
             if (room.countdown < 0) {
@@ -167,40 +191,32 @@ function initSocket(server) {
     }
 
     async function startCountdown(room, roomId, namespace) {
-        if (!room.passage) {
-            // pick random passage by difficulty
-            if (["easy", "medium", "hard"].includes(room.type)) {
-                room.passage = await Passage.aggregate([
-                    { $match: { difficulty: room.type } },
-                    { $sample: { size: 1 } },
-                ]);
-            } else {
-                room.passage = await Passage.aggregate([{ $sample: { size: 1 } }]);
-            }
-            room.passage = room.passage[0];
-        }
+        room.startedCountdown = true;
 
         room.interval = setInterval(() => {
             if (roomsByDifficulty[room.type][roomId] === null) {
                 clearInterval(room.interval);
                 return;
             }
-            namespace.to(roomId).emit("countdown", room.countdown);
+            namespace.to(roomId).emit("countdown", room.countdown + 1);
             room.countdown--;
 
             if (room.countdown < 0) {
                 if (!room.startedGameCountdown) {
-                    room.countdown = GAME_COUNTDOWN;
+                    room.countdown = GAME_COUNTDOWN - 1;
                     room.startedGameCountdown = true;
 
-                    namespace.to(roomId).emit("phase", "game_countdown");
+                    setTimeout(() => {
+                        namespace.to(roomId).emit("phase", "game_countdown");
+                    }, 1000);
+
                     namespace.to(roomId).emit("start_game", {
                         passage: room.passage,
                         playerNames: room.players.map((player) => player.user.username),
                     });
                 } else {
                     clearInterval(room.interval);
-                    
+
                     startGame(room, roomId, namespace)
                 }
             }
@@ -241,20 +257,34 @@ function initSocket(server) {
 
         // Assign player to a room in the selected difficulty
         const room = getAvailableRoom(difficulty);
+        socket.user = user;
+        room.players.push(socket);
+
+
         const roomId = Object.keys(roomsByDifficulty[difficulty]).find((id) => roomsByDifficulty[difficulty][id] === room);
 
-        socket.user = user;
-
-        room.players.push(socket);
         socket.join(roomId);
         socket.roomId = roomId;
+
+        for (const player of room.players) {
+            player.emit("update_players", room.players.map((player) => ({
+                username: player.user.username,
+                wpm: player.wpm || 0,
+                accuracy: player.accuracy || 0,
+                progress: player.progress || 0,
+            })))
+        }
+
+        if (room.passage) {
+            socket.emit("passage", room.passage);
+        }
 
         socket.emit("phase", "waiting");
 
         console.log(`${user.username} joined ${roomId} (${difficulty})`);
 
         // If two players, start countdown at 30s
-        if (room.players.length >= MINIMUM_PLAYERS) {
+        if (room.players.length >= MINIMUM_PLAYERS && !room.startedCountdown) {
             startCountdown(room, roomId, namespace);
         }
 
@@ -275,30 +305,38 @@ function initSocket(server) {
 
         // Typing progress
         socket.on("typed_input", (data) => {
-            if(!room.passage) {
+            if (!room.passage) {
                 return;
             }
 
-            const {word, elapsedTime } = data
+            const { word, elapsedTime } = data
 
-            if(passages == null) {
+            if (word == null || elapsedTime == null) {
+                return;
+            }
+
+            if (passages == null) {
                 passages = room.passage.text.split(" ");
             }
 
             const currentWord = passages[passageIndex];
 
-            for(let i = 0; i < word.length; i++ ) {
-                if(word[i] === currentWord[i]) {
+            if (currentWord == null) {
+                return;
+            }
+
+            for (let i = 0; i < word.length; i++) {
+                if (word[i] === currentWord[i]) {
                     correctCharacters++;
                 }
 
                 charactersTyped++;
             }
 
-            if(word == currentWord) {
+            if (word == currentWord) {
                 passageIndex++;
 
-                if(passageIndex < passages.length) {
+                if (passageIndex < passages.length) {
                     socket.emit("next_word", true);
                 }
             } else {
@@ -310,22 +348,45 @@ function initSocket(server) {
             socket.progress = Math.round((passageIndex / passages.length) * 100);
 
             if (socket.progress >= 100) {
+                room.playersCompleted++;
+
+                socket.placement = room.playersCompleted;
+
+                socket.emit("results", {
+                    wpm: socket.wpm,
+                    accuracy: socket.accuracy,
+                    placement: socket.placement,
+                    elapsedTime: elapsedTime,
+                })
+
                 checkResults(room);
             }
 
             // emit socket room
-            namespace.to(roomId).emit("update_player", {
-                playerName: socket.user.username,
-                progress: socket.progress,
-                wpm: socket.wpm,
-                accuracy: socket.accuracy
-            });
+            for (const player of room.players) {
+                player.emit("update_players", room.players.map((player) => ({
+                    username: player.user.username,
+                    wpm: player.wpm || 0,
+                    placement: player.placement,
+                    accuracy: player.accuracy || 0,
+                    progress: player.progress || 0,
+                })))
+            }
         });
 
         // Disconnect
         socket.on("disconnect", () => {
             console.log(`${user.username} left ${roomId} (${difficulty})`);
             room.players = room.players.filter((s) => s !== socket);
+
+            for (const player of room.players) {
+                player.emit("update_players", room.players.map((player) => ({
+                    username: player.user.username,
+                    wpm: player.wpm || 0,
+                    accuracy: player.accuracy || 0,
+                    progress: player.progress || 0,
+                })))
+            }
 
             const playersLeft = room.players.length || 0;
 
