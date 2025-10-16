@@ -8,7 +8,7 @@ const { authenticateUser, authenticateAdmin } = require("../middleware/auth");
 router.get("/", authenticateUser, async (req, res) => {
     try {
         const user = await Controller.getUsers();
-        console.log(user)
+        
         res.status(200).send(user);
     } catch (error) {
         console.log(error);
@@ -20,7 +20,6 @@ router.get("/profile", authenticateUser, async (req, res) => {
     try {
         const user = await Controller.setChallenges(req.user)
 
-        console.log(user.daily_challenge)
         res.status(200).send(user);
     } catch (error) {
         console.log(error);
@@ -96,7 +95,7 @@ router.put("/admin/:id", authenticateAdmin, async (req, res) => {
 router.delete("/admin/:id", authenticateAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         if (!id) {
             throw new Error("ID is required");
         }

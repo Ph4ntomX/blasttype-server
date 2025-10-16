@@ -128,6 +128,11 @@ function initSocket(server) {
         room.players.forEach(async (player) => {
             console.log("checking foreach")
 
+            if(!player.completed) {
+                player.disconnect();
+                return;
+            }
+
             let { daily_challenge, weekly_challenge } = await ChallengeController.getUserChallenge(player.user);
 
             const changeData = {
@@ -349,6 +354,7 @@ function initSocket(server) {
 
             if (socket.progress >= 100) {
                 room.playersCompleted++;
+                socket.completed = true;
 
                 socket.placement = room.playersCompleted;
 
