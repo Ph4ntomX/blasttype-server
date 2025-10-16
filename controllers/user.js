@@ -38,8 +38,8 @@ Controller.signUpUser = async (username, email, password) => {
         throw new Error("All fields are required");
     }
 
-    if (username.length < 3 || username.length > 20) {
-        throw new Error("Name must be between 3 and 20 characters long");
+    if (username.length < 3 || username.length > 10) {
+        throw new Error("Name must be between 3 and 10 characters long");
     }
 
     if (email.length < 3 || email.length > 30) {
@@ -161,8 +161,8 @@ Controller.updateUser = async (id, email, username, password, role) => {
     }
 
     if (username) {
-        if (username.length < 3 || username.length > 20) {
-            throw new Error("Name must be between 3 and 20 characters long");
+        if (username.length < 3 || username.length > 10) {
+            throw new Error("Name must be between 3 and 10 characters long");
         }
         
         user.username = username;
