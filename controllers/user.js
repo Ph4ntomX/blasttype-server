@@ -147,14 +147,13 @@ Controller.getUserAsAdmin = async (id) => {
 
 Controller.createUser = async (email, username, password, role) => {
     const user = await Controller.signUpUser(email, username, password);
-    user.role = role;
 
-    await user.save();
-
-    return user;
+    return await User.findByIdAndUpdate(user._id, { access_level: role }, { new: true });
 };
 
 Controller.updateUser = async (id, email, username, password, role) => {
+    console.log(id, email, username, password, role);
+
     const user = await User.findById(id);
 
     if (!user) {
@@ -187,7 +186,7 @@ Controller.updateUser = async (id, email, username, password, role) => {
     }
     
     if (role) {
-        user.role = role;
+        user.access_level = role;
     }
 
     await user.save();
@@ -196,13 +195,11 @@ Controller.updateUser = async (id, email, username, password, role) => {
 };
 
 Controller.deleteUser = async (id) => {
-    const user = await User.findById(id);
+    const user = await User.findByIdAndDelete(id);
 
     if (!user) {
         throw new Error("User not found");
     }
-
-    await user.remove();
 
     return user;
 };

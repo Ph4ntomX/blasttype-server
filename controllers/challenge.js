@@ -62,4 +62,44 @@ Controller.changeChallenge = (challenge, data) => {
     return challenge;
 }
 
+Controller.getChallenges = async (params) => {
+    const { type, search } = params;
+
+    let query = {};
+    if(type) query.type = type;
+    if(search) query.text = { $regex: search, $options: "i" };
+
+    const challenges = await Challenge.find(query);
+
+    return challenges;
+}
+
+Controller.createChallenge = async (params) => {
+    try {
+        const newChallenge = await Challenge.create(params);
+        return newChallenge;
+    } catch (error) {
+        return;
+    }
+}
+
+
+Controller.updateChallenge = async (id, params) => {
+    try {
+        const updatedChallenge = await Challenge.findByIdAndUpdate(id, params, { new: true });
+        return updatedChallenge;
+    } catch (error) {
+        return;
+    }
+}
+
+Controller.deleteChallenge = async (id) => {
+    try {
+        const deletedChallenge = await Challenge.findByIdAndDelete(id);
+        return deletedChallenge;
+    } catch (error) {
+        return;
+    }
+}
+
 module.exports = Controller

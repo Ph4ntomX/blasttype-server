@@ -11,6 +11,7 @@ const UserAuthRoute = require("./route/auth");
 const UserRoute = require("./route/user");
 const PassagesRoute = require("./route/passages");
 const GamesRoute = require("./route/games");
+const ChallengesRoute = require("./route/challenge");
 const initSocket = require("./socket");
 
 require("dotenv").config();
@@ -41,6 +42,9 @@ app.use("/api/auth", UserAuthRoute);
 app.use("/api/users", UserRoute);
 app.use("/api/passages", PassagesRoute);
 app.use("/api/games", GamesRoute);
+app.use("/api/challenges", ChallengesRoute);
+
+
 
 initSocket(server);
 

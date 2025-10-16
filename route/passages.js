@@ -2,8 +2,11 @@ const express = require("express");
 
 const router = express.Router();
 const Controller = require("../controllers/passage");
+const { authenticateUser, authenticateAdmin } = require("../middleware/auth");
 
-router.get("/", async (req, res) => {
+
+
+router.get("/", authenticateUser, async (req, res) => {
   try {
     const passages = await Controller.getPassages({difficulty: req.query.difficulty, search: req.query.search});
 
@@ -17,7 +20,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/random", async (req, res) => {
+router.get("/random", authenticateUser, async (req, res) => {
   try {
     const difficulty = req.query.difficulty;
 
@@ -33,7 +36,7 @@ router.get("/random", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", authenticateUser, async (req, res) => {
   try {
     const id = req.params.id;
 
@@ -49,7 +52,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", authenticateAdmin, async (req, res) => {
   try {
     console.log(req.body)
 
@@ -75,7 +78,7 @@ router.post("/", async (req, res) => {
   }
 })
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", authenticateAdmin, async (req, res) => {
   try {
     const id = req.params.id;
 
@@ -95,7 +98,7 @@ router.put("/:id", async (req, res) => {
   }
 })
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authenticateAdmin, async (req, res) => {
   try {
     const id = req.params.id;
 

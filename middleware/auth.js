@@ -29,7 +29,7 @@ const authenticateAdmin = async (req, res, next) => {
 
         if (!user) return res.status(404).json({ message: "User not found" });
 
-        if (user.role != "admin") return res.status(401).json({ message: "Unauthorized" });
+        if (user.access_level != "admin") return res.status(401).json({ message: "Unauthorized" });
 
         req.user = user; // attach user object to the request
         next();

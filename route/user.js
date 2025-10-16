@@ -49,7 +49,7 @@ router.post("/solo_practice", authenticateUser, async (req, res) => {
 router.get("/admin", authenticateAdmin, async (req, res) => {
     try {
         const users = await Controller.getUsersAsAdmin();
-        console.log(users)
+
         res.status(200).send(users);
     } catch (error) {
         console.log(error);
@@ -73,9 +73,18 @@ router.post("/admin", authenticateAdmin, async (req, res) => {
 router.put("/admin/:id", authenticateAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        const { email, username, password, role } = req.body;
 
-        const user = await Controller.updateUser(id, email, username, password, role);
+        if (!id) {
+            throw new Error("ID is required");
+        }
+
+        if (id == req.user.id) {
+            throw new Error("You cannot update your own account");
+        }
+
+        const { email, username, password, access_level } = req.body;
+
+        const user = await Controller.updateUser(id, email, username, password, access_level);
 
         return res.status(200).send(user);
     } catch (error) {
@@ -87,6 +96,14 @@ router.put("/admin/:id", authenticateAdmin, async (req, res) => {
 router.delete("/admin/:id", authenticateAdmin, async (req, res) => {
     try {
         const { id } = req.params;
+        
+        if (!id) {
+            throw new Error("ID is required");
+        }
+
+        if (id == req.user.id) {
+            throw new Error("You cannot update your own account");
+        }
 
         const user = await Controller.deleteUser(id);
 
