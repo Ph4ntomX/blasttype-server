@@ -12,7 +12,7 @@ const ChallengeController = require("./controllers/challenge");
 
 const jwt = require("jsonwebtoken");
 
-const MINIMUM_PLAYERS = 1;
+const MINIMUM_PLAYERS = 2;
 const COUNTDOWN = 5;
 const GAME_COUNTDOWN = 3;
 const GAME_TIMER = 60
@@ -400,10 +400,15 @@ function initSocket(server) {
                 checkResults(room);
             }
 
-            if (playersLeft <= 1) {
-                console.log("Game ends")
+            if (playersLeft < 1) {
+                console.log("Game ends");
 
                 roomsByDifficulty[difficulty][roomId] = null;
+            } else if (!room.started && playersLeft < MINIMUM_PLAYERS) {
+                if(room.startedCountdown) {
+                    room.startedCountdown = false;
+                    clearInterval(room.interval);
+                }
             }
         });
     });
